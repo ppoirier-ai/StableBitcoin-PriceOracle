@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
-use pyth_sdk_solana::{SolanaPriceAccount, Price, PriceFeed};
+use pyth_sdk_solana::{Price, PriceFeed, PythError};
+use pyth_sdk_solana::state::SolanaPriceAccount;  // Correct submodule import
 
-declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");  // Replace with actual ID
+declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
 
 #[program]
 pub mod sma_oracle {
@@ -9,30 +10,37 @@ pub mod sma_oracle {
 
     #[account]
     pub struct OracleState {
-        pub sma_1000: u64,  // Scaled price (e.g., USD cents)
+        pub sma_1000: u64,
         pub last_update: i64,
     }
 
     pub fn update_sma(ctx: Context<UpdateSMA>, new_sma: u64) -> Result<()> {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
-        // Corrected Pyth loading: Pass reference &pyth_account
-        let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(&pyth_account)
-            .map_err(|e| error!(ErrorCode::PythError { inner: e }))?;  // Map PythError for better tracing
+        // Load Pyth price feed
+        let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
+            .map_err(|e| {
+                msg!("Pyth error: {:?}", e);  // Log inner error for debugging
+                ErrorCode::PythError
+            })?;
 
         let clock = Clock::get()?;
-        let max_age = 60u64;  // Staleness threshold
-        let current_price_opt: Option<Price> = price_feed.get_price_no_older_than(clock.unix_timestamp as u64, max_age);
+        let max_age = 60u64;
+        let current_time = clock.unix_timestamp as u64;  // Cast i64 to u64 (assumes positive)
+        let current_price_opt: Option<Price> = price_feed.get_price_no_older_than(current_time, max_age);
 
         let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice)?;
 
-        // Stricter confidence check (e.g., <0.1% of price; adjust for BTC volatility)
-        require!(price.conf < price.price.abs() / 1000, ErrorCode::HighConfidence);
+        // Confidence check (<0.1% of price)
+        require!(price.conf < (price.price.abs() as u64) / 1000, ErrorCode::HighConfidence);
 
-        // Convert i64 to u64, assuming positive BTC price
-        let current_price: u64 = price.price.try_into().map_err(|_| ErrorCode::InvalidPrice)?;
+        // Convert i64 to u64 (handle negative, though unlikely for BTC)
+        let current_price: u64 = if price.price >= 0 {
+            price.price as u64
+        } else {
+            return Err(ErrorCode::InvalidPrice);
+        };
 
-        // Sanity check
         require!(new_sma > current_price / 2 && new_sma < current_price * 2, ErrorCode::InvalidSMA);
 
         let oracle_state = &mut ctx.accounts.oracle_state;
@@ -65,8 +73,8 @@ pub struct GetSMA<'info> {
 pub enum ErrorCode {
     #[msg("Invalid SMA value")]
     InvalidSMA,
-    #[msg("Pyth oracle error: {inner}")]
-    PythError { inner: pyth_sdk_solana::PythError },  // Enhanced with inner error
+    #[msg("Pyth oracle error")]
+    PythError,  // Unit variant; inner logged in code
     #[msg("Stale price data")]
     StalePrice,
     #[msg("Invalid price value")]
