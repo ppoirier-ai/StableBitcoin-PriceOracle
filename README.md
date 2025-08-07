@@ -23,19 +23,19 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 
 ## Setup
 1. Clone the repo:
-git clone https://github.com/ppoirier-ai/BTC1000SMA.git
+`git clone https://github.com/ppoirier-ai/BTC1000SMA.git`
 
-2. Change Directory
-cd BTC1000SMA
+2. Change Directory:
+`cd BTC1000SMA`
 
 3. Install dependencies:
 - Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- Solana: `sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"`
+- Solana: `curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash`
 - Anchor: `cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked`
 - Python: `pip install requests pandas solana`
 
 4. Build the Solana program:
-anchor build
+`anchor build`
 
 ## Usage
 
