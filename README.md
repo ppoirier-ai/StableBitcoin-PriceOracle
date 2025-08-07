@@ -23,8 +23,9 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 
 ## Setup
 1. Clone the repo:
-git clone https://github.com/yourusername/BTC1000SMA.git
+git clone https://github.com/ppoirier-ai/BTC1000SMA.git
 
+2. Change Directory
 cd BTC1000SMA
 
 3. Install dependencies:
@@ -33,7 +34,7 @@ cd BTC1000SMA
 - Anchor: `cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked`
 - Python: `pip install requests pandas solana`
 
-3. Build the Solana program:
+4. Build the Solana program:
 anchor build
 
 ## Usage
