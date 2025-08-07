@@ -17,32 +17,29 @@ pub mod sma_oracle {
     pub fn update_sma(ctx: Context<UpdateSMA>, new_sma: u64) -> Result<()> {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
-        // Load Pyth price feed
         let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
             .map_err(|e: PythError| {
-                msg!("Pyth error: {:?}", e);  // Log inner error
+                msg!("Pyth error: {:?}", e);
                 ErrorCode::PythError.into()
             })?;
 
         let clock = Clock::get()?;
-        let current_time = clock.unix_timestamp;  // Keep as i64
-        let max_age = 60u64;
+        let current_time = clock.unix_timestamp;
+        let max_age = 60i64;  // Changed to i64 to match SDK signature
 
         let current_price_opt: Option<Price> = price_feed.get_price_no_older_than(current_time, max_age);
 
         let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice.into())?;
 
-        // Confidence check (<0.1% of price)
         require!(price.conf < (price.price.abs() as u64) / 1000, ErrorCode::HighConfidence.into());
 
-        // Convert i64 to u64 with check
         let current_price: u64 = if price.price >= 0 {
             price.price.try_into().map_err(|_| ErrorCode::InvalidPrice.into())?
         } else {
             return Err(ErrorCode::InvalidPrice.into());
         };
 
-        require!(new_sma > current_price / 2 && new_sma < current_price * 2, ErrorCode::InvalidSMA);
+        require!(new_sma > current_price / 2 && new_sma < current_price * 2, ErrorCode::InvalidSMA.into());
 
         let oracle_state = &mut ctx.accounts.oracle_state;
         oracle_state.sma_1000 = new_sma;
