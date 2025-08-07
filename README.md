@@ -42,6 +42,10 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 # Verify Anchor is now accessible
 anchor --version  # Should output something like "anchor-cli 0.31.1"
 
+Create public & private keys & update files:
+- in terminal: `solana-keygen new --outfile target/deploy/sma_oracle-keypair.json --no-bip39-passphrase` # copy the public key and passphrase in a secure location
+- change the "YourProgramIDHere" in the file programs/sma_oracle/src/lib.rs and Anchor.toml with the public key created above
+
 4. Build the Solana program:
 `anchor build`
 
