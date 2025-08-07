@@ -15,9 +15,9 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 - **Integration**: Ready for extension to mint/burn logic in treasury applications.
 
 ## Prerequisites
-- Rust (1.80+)
-- Solana CLI (1.18+)
-- Anchor CLI (0.30+)
+- Rust (1.86+)
+- Solana CLI (2.2+)
+- Anchor CLI (0.31+)
 - Python 3.12+ with `requests`, `pandas`, and optionally `solana` for on-chain updates.
 - A Solana wallet and RPC endpoint (e.g., QuickNode).
 
