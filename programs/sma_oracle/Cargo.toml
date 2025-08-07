@@ -14,8 +14,12 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
-
+custom-heap = []  # Suppresses custom-heap warning
+custom-panic = []  # Suppresses custom-panic warning
+anchor-debug = []  # Suppresses anchor-debug warning
 
 [dependencies]
 anchor-lang = "0.31.1"  # Match CLI version
 pyth-sdk-solana = "0.10.5"  # Latest for better compatibility
+
+
