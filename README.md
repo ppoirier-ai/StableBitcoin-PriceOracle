@@ -24,9 +24,10 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 ## Setup
 1. Clone the repo:
 git clone https://github.com/yourusername/BTC1000SMA.git
+
 cd BTC1000SMA
 
-2. Install dependencies:
+3. Install dependencies:
 - Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - Solana: `sh -c "$(curl -sSfL https://release.solana.com/v1.18.0/install)"`
 - Anchor: `cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked`
