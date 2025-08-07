@@ -14,9 +14,10 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
-custom-heap = []  # Suppresses custom-heap warning
-custom-panic = []  # Suppresses custom-panic warning
-anchor-debug = []  # Suppresses anchor-debug warning
+custom-heap = []
+custom-panic = []
+anchor-debug = []
+idl-build = ["anchor-lang/idl-build"]  # Enables IDL generation
 
 [dependencies]
 anchor-lang = "0.31.1"  # Match CLI version
