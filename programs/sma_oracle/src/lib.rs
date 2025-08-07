@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
-use pyth_sdk_solana::{SolanaPriceAccount, Price, PriceFeed, PythError};  // Add PythError for logging
+use pyth_sdk_solana::{Price, PriceFeed, PythError};
+use pyth_sdk_solana::state::SolanaPriceAccount;  // From state submodule
 
 declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
 
@@ -18,9 +19,9 @@ pub mod sma_oracle {
 
         // Load Pyth price feed
         let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
-            .map_err(|e| {
-                msg!("Pyth error: {:?}", e);  // Log inner PythError
-                ErrorCode::PythError
+            .map_err(|e: PythError| {
+                msg!("Pyth error: {:?}", e);  // Log inner error
+                ErrorCode::PythError.into()  // Convert to Error
             })?;
 
         let clock = Clock::get()?;
@@ -29,16 +30,16 @@ pub mod sma_oracle {
 
         let current_price_opt: Option<Price> = price_feed.get_price_no_older_than(current_time, max_age);
 
-        let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice)?;
+        let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice.into())?;  // Convert to Error
 
         // Confidence check
         require!(price.conf < (price.price.abs() as u64) / 1000, ErrorCode::HighConfidence);
 
         // Convert i64 to u64 with check
         let current_price: u64 = if price.price >= 0 {
-            price.price.try_into().map_err(|_| ErrorCode::InvalidPrice)?
+            (price.price as u64)
         } else {
-            return Err(ErrorCode::InvalidPrice);
+            return Err(ErrorCode::InvalidPrice.into());
         };
 
         require!(new_sma > current_price / 2 && new_sma < current_price * 2, ErrorCode::InvalidSMA);
