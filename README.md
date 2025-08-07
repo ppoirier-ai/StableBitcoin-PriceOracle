@@ -31,7 +31,9 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 3. Install dependencies:
 - Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - Solana: `curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash`
-- Anchor: `cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked`
+- Anchor: `cargo install --git https://github.com/solana-foundation/anchor avm --force`
+- `avm install latest`
+- `avm use latest`
 - Python: `pip install requests pandas solana`
 
 4. Build the Solana program:
