@@ -15,13 +15,7 @@ no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
 
-[dependencies]
-anchor-lang = "0.30.1"
-pyth-sdk-solana = "0.9.0"
 
-[profile.release]
-overflow-checks = true  # Enable for security against overflows
-lto = true
-codegen-units = 1
-panic = "abort"
-opt-level = 3
+[dependencies]
+anchor-lang = "0.31.1"  # Match CLI version
+pyth-sdk-solana = "0.10.5"  # Latest for better compatibility

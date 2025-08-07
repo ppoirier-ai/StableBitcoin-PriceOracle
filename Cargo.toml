@@ -2,9 +2,10 @@
 members = [
     "programs/sma_oracle",
 ]
+resolver = "2"  # Suppress resolver warning
 
 [profile.release]
-overflow-checks = true  # Optional: Applies workspace-wide if needed
+overflow-checks = true
 lto = true
 codegen-units = 1
 panic = "abort"

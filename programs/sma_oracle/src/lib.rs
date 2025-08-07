@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use pyth_sdk_solana::load_price_account;
+use pyth_sdk_solana::state::load_price_account;
 
 declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");  // Update with actual ID after deployment
 
