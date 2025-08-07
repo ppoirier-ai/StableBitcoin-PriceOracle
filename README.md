@@ -35,6 +35,12 @@ This oracle is designed for applications like StableBitcoin (SBTC), providing a 
 - `avm install latest`
 - `avm use latest`
 - Python: `pip install requests pandas solana`
+- `echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc`
+- `echo 'export PATH="$HOME/.avm/bin:$PATH"' >> ~/.zshrc`
+- `source ~/.zshrc`
+
+# Verify Anchor is now accessible
+anchor --version  # Should output something like "anchor-cli 0.31.1"
 
 4. Build the Solana program:
 `anchor build`
