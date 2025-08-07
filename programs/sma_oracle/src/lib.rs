@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use pyth_sdk_solana::load_price_account;
 
-declare_id!("YourProgramIdHere");  // Update with actual ID after deployment
+declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");  // Update with actual ID after deployment
 
 #[program]
 pub mod sma_oracle {

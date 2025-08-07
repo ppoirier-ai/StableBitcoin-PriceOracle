@@ -2,7 +2,7 @@
 seeds = false
 
 [programs.localnet]
-sma_oracle = "YourProgramIdHere"  # Replace after deployment
+sma_oracle = "FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa"  # Replace after deployment
 
 [registry]
 url = "https://api.apr.dev"
