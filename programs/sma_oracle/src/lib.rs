@@ -57,7 +57,8 @@ pub mod sma_oracle {
 #[derive(Accounts)]
 pub struct UpdateSMA<'info> {
     #[account(mut)]
-    pub oracle_state: Account<'info, OracleState>,
+    pub oracle_state: Account<'info, sma_oracle::OracleState>,
+    /// CHECK: This is a Pyth price account that we validate through the Pyth SDK
     pub pyth_price_account: AccountInfo<'info>,
     #[account(signer)]
     pub authority: Signer<'info>,
@@ -65,7 +66,7 @@ pub struct UpdateSMA<'info> {
 
 #[derive(Accounts)]
 pub struct GetSMA<'info> {
-    pub oracle_state: Account<'info, OracleState>,
+    pub oracle_state: Account<'info, sma_oracle::OracleState>,
 }
 
 #[error_code]
