@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
-use pyth_sdk_solana::{Price, PriceFeed};
-use pyth_sdk_solana::state::SolanaPriceAccount;  // Remove PythError if not logging
+use pyth_sdk_solana::{Price, PriceFeed, PythError};
+use pyth_sdk_solana::state::SolanaPriceAccount;
 
 declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
 
@@ -18,7 +18,10 @@ pub mod sma_oracle {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
         let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
-            .map_err(|_| ErrorCode::PythError.into())?;  // Simplified map_err; add logging if needed
+            .map_err(|e: PythError| {
+                msg!("Pyth error: {:?}", e);
+                ErrorCode::PythError.into()
+            })?;
 
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
@@ -28,7 +31,8 @@ pub mod sma_oracle {
 
         let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice.into())?;
 
-        require!(price.conf < (price.price.abs() as u64) / 1000, ErrorCode::HighConfidence.into());
+        // Confidence check using unsigned_abs for safe u64
+        require!(price.conf < price.price.unsigned_abs() / 1000, ErrorCode::HighConfidence.into());
 
         let current_price: u64 = if price.price >= 0 {
             price.price.try_into().map_err(|_| ErrorCode::InvalidPrice.into())?
