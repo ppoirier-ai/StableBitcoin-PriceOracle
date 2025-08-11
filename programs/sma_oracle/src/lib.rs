@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
-use pyth_sdk_solana::{Price, PriceFeed, PythError};
-use pyth_sdk_solana::state::SolanaPriceAccount;
+use pyth_sdk_solana::{Price, PriceFeed};
+use pyth_sdk_solana::state::SolanaPriceAccount;  // Remove PythError if not logging
 
 declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
 
@@ -18,14 +18,11 @@ pub mod sma_oracle {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
         let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
-            .map_err(|e: PythError| {
-                msg!("Pyth error: {:?}", e);
-                ErrorCode::PythError.into()
-            })?;
+            .map_err(|_| ErrorCode::PythError.into())?;  // Simplified map_err; add logging if needed
 
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
-        let max_age = 60i64;  // Changed to i64 to match SDK signature
+        let max_age = 60u64;
 
         let current_price_opt: Option<Price> = price_feed.get_price_no_older_than(current_time, max_age);
 
