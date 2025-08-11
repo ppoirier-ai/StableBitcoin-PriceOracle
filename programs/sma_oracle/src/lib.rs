@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use pyth_sdk_solana::{Price, PriceFeed, PythError};
 use pyth_sdk_solana::state::SolanaPriceAccount;
 
-declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
+declare_id!("G7i3UNUsFpm3NSAvY2wWtVqSM3HQhoxUJ5NyWSPZQDoL");
 
 #[program]
 pub mod sma_oracle {
