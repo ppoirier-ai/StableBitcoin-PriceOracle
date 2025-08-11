@@ -31,8 +31,8 @@ pub mod sma_oracle {
 
         let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice.into())?;
 
-        // Confidence check using unsigned_abs for safe u64
-        require!(price.conf < price.price.unsigned_abs() / 1000, ErrorCode::HighConfidence.into());
+        // Confidence check with explicit u64 literal
+        require!(price.conf < price.price.unsigned_abs() / 1000u64, ErrorCode::HighConfidence.into());
 
         let current_price: u64 = if price.price >= 0 {
             price.price.try_into().map_err(|_| ErrorCode::InvalidPrice.into())?
