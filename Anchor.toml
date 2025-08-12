@@ -8,11 +8,8 @@ sma_oracle = "G7i3UNUsFpm3NSAvY2wWtVqSM3HQhoxUJ5NyWSPZQDoL"  # Replace after dep
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 # [scripts]
 # test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
-[provider]
-cluster = "devnet"
-wallet = "~/.config/solana/id.json"
