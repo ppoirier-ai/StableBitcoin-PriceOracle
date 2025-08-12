@@ -25,3 +25,4 @@ target
 
 # Anchor test ledger
 .anchor/test-ledger/
+test-ledger/
