@@ -82,3 +82,19 @@ pub enum ErrorCode {
     #[msg("High confidence interval - unreliable data")]
     HighConfidence,
 }
+
+pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    let oracle_state = &mut ctx.accounts.oracle_state;
+    oracle_state.sma_1000 = 0;
+    oracle_state.last_update = 0;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(init, payer = authority, space = 8 + 8 + 8, seeds = [b"oracle"], bump)]
+    pub oracle_state: Account<'info, OracleState>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
