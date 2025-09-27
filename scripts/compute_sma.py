@@ -1,70 +1,74 @@
-import requests
+import numpy as np
 import pandas as pd
+import requests
 from datetime import datetime, timedelta
+import json
 
-# Use CoinGecko API instead as it's more reliable and doesn't require authentication
-BASE_URL = "https://api.coingecko.com/api/v3"
-
-def fetch_historical_data(days=365):
-    # CoinGecko API uses days parameter for historical data
-    params = {
-        "vs_currency": "usd",
-        "days": days
-    }
-    
-    print(f"Requesting {days} days of Bitcoin price data")
-    print(f"API URL: {BASE_URL}/coins/bitcoin/market_chart")
-    print(f"Parameters: {params}")
-    
-    response = requests.get(f"{BASE_URL}/coins/bitcoin/market_chart", params=params)
-    print(f"Response status: {response.status_code}")
-    
+def get_coingecko_historical_data(days=365):
+    """Fetch historical BTC/USD data from CoinGecko API as fallback."""
+    url = f"https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days={days}&interval=daily"
+    response = requests.get(url)
     if response.status_code != 200:
-        raise Exception(f"API error: {response.text}")
-    
+        raise ValueError(f"Failed to fetch data: {response.status_code}")
     data = response.json()
-    if 'prices' not in data or not data['prices']:
-        raise Exception("No price data returned from CoinGecko API")
-    
-    # Convert to DataFrame
     prices = data['prices']
     df = pd.DataFrame(prices, columns=['timestamp', 'price'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    
-    # Resample to daily data and calculate OHLCV
-    df.set_index('timestamp', inplace=True)
-    df = df.resample('D').agg({
-        'price': ['first', 'max', 'min', 'last']
-    }).dropna()
-    
-    # Flatten column names
-    df.columns = ['open', 'high', 'low', 'close']
-    df.reset_index(inplace=True)
-    
+    df['date'] = pd.to_datetime(df['timestamp'], unit='ms').dt.date
+    df = df.set_index('date')
+    df = df.sort_index(ascending=False)  # Recent first
     return df
 
-try:
-    # CoinGecko free API allows up to 365 days
-    days = 365
-    df = fetch_historical_data(days)
+def compute_trend_indicator(df, short_window=20, long_window=100):
+    """Compute a simplified trend indicator based on moving averages."""
+    close = df['price'].values
     
-    # Calculate 365-day SMA
-    sma_365 = df['close'].mean()
-    sma_365_scaled = int(sma_365 * 100)  # Scale to cents for on-chain u64
+    # Calculate short and long moving averages
+    short_ma = pd.Series(close).rolling(short_window, min_periods=1).mean()
+    long_ma = pd.Series(close).rolling(long_window, min_periods=1).mean()
+    
+    # Calculate trend strength
+    trend_ratio = short_ma / long_ma
+    
+    # Calculate volatility-adjusted trend
+    returns = pd.Series(close).pct_change().dropna()
+    volatility = returns.rolling(20, min_periods=1).std()
+    
+    # Weight the trend by volatility
+    trend_value = trend_ratio.iloc[0] * (1 + volatility.iloc[0] if not pd.isna(volatility.iloc[0]) else 1)
+    
+    # Scale to current price
+    current_price = close[0]
+    trend_price = current_price * trend_value
+    
+    return trend_price
 
-    print(f"\nResults:")
-    print(f"365-day SMA (USD): {sma_365:.2f}")
-    print(f"Scaled SMA (cents): {sma_365_scaled}")
-    print(f"Data points: {len(df)}")
-    
-    # Calculate other periods for comparison
-    if len(df) >= 30:
-        sma_30 = df.tail(30)['close'].mean()
-        print(f"30-day SMA (USD): {sma_30:.2f}")
-    
-    if len(df) >= 90:
-        sma_90 = df.tail(90)['close'].mean()
-        print(f"90-day SMA (USD): {sma_90:.2f}")
-    
-except Exception as e:
-    print(f"Error computing SMA: {e}")
+if __name__ == "__main__":
+    try:
+        # Fetch data from CoinGecko (Pyth Network is primarily for on-chain access)
+        print("Fetching Bitcoin historical data from CoinGecko...")
+        print("Note: Pyth Network is used on-chain for real-time price validation")
+        df = get_coingecko_historical_data(days=365)
+        print(f"Data points: {len(df)}")
+        
+        if len(df) == 0:
+            print("No data available, exiting...")
+            exit(1)
+        
+        print("Computing trend indicator...")
+        trend_value = compute_trend_indicator(df)
+        
+        if np.isnan(trend_value):
+            print("Error: Trend computation resulted in NaN")
+        else:
+            trend_scaled = int(trend_value * 100)  # Scale to cents for on-chain u64
+            current_price = df['price'].iloc[0]
+            print(f"\nResults:")
+            print(f"Current Bitcoin price: ${current_price:.2f}")
+            print(f"Trend indicator value: ${trend_value:.2f}")
+            print(f"Scaled trend (cents): {trend_scaled}")
+            print(f"Data source: CoinGecko (Pyth Network used on-chain for validation)")
+            
+    except Exception as e:
+        print(f"Error computing trend indicator: {e}")
+        import traceback
+        traceback.print_exc()

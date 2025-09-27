@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use pyth_sdk_solana::{Price, PriceFeed, PythError};
 use pyth_sdk_solana::state::SolanaPriceAccount;
 
-declare_id!("G7i3UNUsFpm3NSAvY2wWtVqSM3HQhoxUJ5NyWSPZQDoL");
+declare_id!("FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa");
 
 #[program]
 pub mod sma_oracle {
@@ -10,11 +10,11 @@ pub mod sma_oracle {
 
     #[account]
     pub struct OracleState {
-        pub sma_1000: u64,
+        pub trend_value: u64,
         pub last_update: i64,
     }
 
-    pub fn update_sma(ctx: Context<UpdateSMA>, new_sma: u64) -> Result<()> {
+    pub fn update_trend(ctx: Context<UpdateTrend>, new_trend: u64) -> Result<()> {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
         let price_feed: PriceFeed = SolanaPriceAccount::account_info_to_feed(pyth_account)
@@ -31,48 +31,55 @@ pub mod sma_oracle {
 
         let price: Price = current_price_opt.ok_or(ErrorCode::StalePrice)?;
 
-        // Confidence check
+        // Confidence check - ensure confidence is reasonable
         require!(price.conf < price.price.unsigned_abs() / 1000u64, ErrorCode::HighConfidence);
 
+        // Convert price to u64 (Pyth prices are in base units)
         let current_price: u64 = if price.price >= 0 {
-            price.price.try_into().map_err(|_| ErrorCode::InvalidPrice)?
+            // Convert from Pyth's base units to cents
+            let price_in_cents = (price.price as u64) / (10u64.pow((-price.expo) as u32 - 2));
+            price_in_cents
         } else {
             return Err(anchor_lang::error::Error::from(ErrorCode::InvalidPrice));
         };
 
-        require!(new_sma > current_price / 2 && new_sma < current_price * 2, ErrorCode::InvalidSMA);
+        // Trend validation: should be within reasonable bounds of current price
+        require!(new_trend > current_price / 10 && new_trend < current_price * 10, ErrorCode::InvalidTrend);
 
         let oracle_state = &mut ctx.accounts.oracle_state;
-        oracle_state.sma_1000 = new_sma;
+        oracle_state.trend_value = new_trend;
         oracle_state.last_update = clock.unix_timestamp;
+
+        msg!("Updated trend value: {} cents (current BTC price: {} cents)", new_trend, current_price);
 
         Ok(())
     }
 
-    pub fn get_sma(ctx: Context<GetSMA>) -> Result<u64> {
-        Ok(ctx.accounts.oracle_state.sma_1000)
+    pub fn get_trend(ctx: Context<GetTrend>) -> Result<u64> {
+        Ok(ctx.accounts.oracle_state.trend_value)
     }
 }
 
 #[derive(Accounts)]
-pub struct UpdateSMA<'info> {
+pub struct UpdateTrend<'info> {
     #[account(mut)]
     pub oracle_state: Account<'info, sma_oracle::OracleState>,
     /// CHECK: This is a Pyth price account that we validate through the Pyth SDK
+    /// Pyth Network BTC/USD price feed: 8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E
     pub pyth_price_account: AccountInfo<'info>,
     #[account(signer)]
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
-pub struct GetSMA<'info> {
+pub struct GetTrend<'info> {
     pub oracle_state: Account<'info, sma_oracle::OracleState>,
 }
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Invalid SMA value")]
-    InvalidSMA,
+    #[msg("Invalid trend value")]
+    InvalidTrend,
     #[msg("Pyth oracle error")]
     PythError,
     #[msg("Stale price data")]
@@ -85,7 +92,7 @@ pub enum ErrorCode {
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
     let oracle_state = &mut ctx.accounts.oracle_state;
-    oracle_state.sma_1000 = 0;
+    oracle_state.trend_value = 0;
     oracle_state.last_update = 0;
     Ok(())
 }
