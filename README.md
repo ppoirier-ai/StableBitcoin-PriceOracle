@@ -27,7 +27,7 @@ It enforces daily timeframe consistency across any chart resolution using reques
 ## Implementation
 
 The setup includes:
-- An off-chain Python script to fetch historical data from CoinGecko, compute the SBTC target price using the weighted ridge power law regression, and (optionally) update the on-chain program
+- An off-chain Python script to fetch historical data from Pyth Network, compute the SBTC target price using the weighted ridge power law regression, and (optionally) update the on-chain program
 - An on-chain Solana program (built with Anchor in Rust) that stores the SBTC target price, validates it against Pyth's real-time feeds for security, and exposes it for querying
 
 **Key Features:**
@@ -35,6 +35,7 @@ The setup includes:
 - **Off-chain Computation**: Computes SBTC target prices off-chain to minimize Solana compute costs
 - **Decentralized Data**: Leverages Pyth Network's aggregated price data from 100+ publishers
 - **Mathematical Rigor**: Implements sophisticated power law regression with multiple regularization techniques
+- **Single Data Source**: Uses Pyth Network exclusively for both historical and real-time Bitcoin price data
 
 ## Features
 - **Mathematical Rigor**: Implements weighted ridge power law regression with multiple regularization techniques
@@ -61,7 +62,8 @@ The SBTC target price computation uses the following default parameters:
 - Rust (1.86+)
 - Solana CLI (2.2+)
 - Anchor CLI (0.31+)
-- Python 3.12+ with `requests`, `pandas`, `numpy`
+- Python 3.12+ with `requests`, `pandas`, `numpy`, and `flask`
+- For production: `gunicorn` (WSGI server) and `jq` (JSON processor)
 - A Solana wallet and RPC endpoint (e.g., QuickNode)
 
 ## Setup
@@ -98,26 +100,249 @@ anchor build
 
 ## Usage
 
-### Off-chain SBTC Target Price Computation
-Run the Python script to compute the SBTC target price:
+### Quick Start
+1. **Start the API server:**
+   ```bash
+   cd scripts
+   python sbtc_api.py
+   ```
+
+2. **Test the API:**
+   ```bash
+   curl http://localhost:5000/sbtc/current
+   ```
+
+3. **Deploy the Solana program:**
+   ```bash
+   anchor deploy --provider.cluster devnet
+   ```
+
+### API Server Deployment
+
+#### Local Development
+1. **Install Dependencies:**
+   ```bash
+   pip install flask requests pandas numpy
+   ```
+
+2. **Start the API Server:**
+   ```bash
+   cd scripts
+   python sbtc_api.py
+   ```
+   The server will start on `http://localhost:5000`
+
+3. **Test the API:**
+   ```bash
+   # Run automated tests
+   python test_api.py
+   
+   # Or test manually
+   curl http://localhost:5000/sbtc/current
+   curl http://localhost:5000/health
+   ```
+
+#### Production Deployment (Cloud Server)
+1. **Deploy to Cloud Server:**
+   ```bash
+   # Upload files to your cloud server
+   scp -r scripts/ user@your-server:/path/to/sbtc-oracle/
+   
+   # SSH into server
+   ssh user@your-server
+   
+   # Install dependencies
+   pip install flask requests pandas numpy gunicorn
+   
+   # Start with Gunicorn (production WSGI server)
+   cd /path/to/sbtc-oracle/scripts
+   gunicorn -w 4 -b 0.0.0.0:5000 sbtc_api:app
+   ```
+
+2. **Set up Process Management:**
+   ```bash
+   # Using systemd (Ubuntu/Debian)
+   sudo nano /etc/systemd/system/sbtc-oracle.service
+   ```
+   
+   Add the following service configuration:
+   ```ini
+   [Unit]
+   Description=SBTC Target Price Oracle API
+   After=network.target
+   
+   [Service]
+   Type=simple
+   User=ubuntu
+   WorkingDirectory=/path/to/sbtc-oracle/scripts
+   ExecStart=/usr/local/bin/gunicorn -w 4 -b 0.0.0.0:5000 sbtc_api:app
+   Restart=always
+   
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   
+   Enable and start the service:
+   ```bash
+   sudo systemctl enable sbtc-oracle
+   sudo systemctl start sbtc-oracle
+   sudo systemctl status sbtc-oracle
+   ```
+
+3. **Set up Cron Job for Regular Updates:**
+   ```bash
+   # Edit crontab
+   crontab -e
+   
+   # Add this line to update every hour
+   0 * * * * curl -X GET http://localhost:5000/sbtc/current > /var/log/sbtc-update.log 2>&1
+   ```
+
+### API Endpoints
+
+#### 1. Compute SBTC Target Price
 ```bash
-python3 scripts/compute_sma.py
+GET /sbtc/current
 ```
 
-This fetches 365 days of historical BTC/USD data from CoinGecko and outputs the SBTC target price. The script:
-- Fetches daily Bitcoin price data
-- Computes weighted ridge power law regression with volatility weighting
-- Applies time-based weighting and ridge regularization
-- Implements dampening mechanism for stability
-- Scales the result to cents for on-chain storage
-- Outputs both the raw value and scaled value
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "current_btc_price": 46689.71,
+    "sbtc_target_price": 46689.71,
+    "sbtc_scaled_cents": 4668970,
+    "data_points_used": 1000,
+    "computation_timestamp": "2025-09-28T11:38:22.496636",
+    "data_source": "Pyth Network BTC/USD Price Feed (8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E)"
+  }
+}
+```
 
-### On-chain Deployment and Testing
-1. Switch to devnet: `solana config set --url https://api.devnet.solana.com`
-2. Deploy: `anchor deploy --provider.cluster devnet`
-3. Test: `anchor test --skip-local-validator`
+#### 2. Health Check
+```bash
+GET /health
+```
 
-For mainnet, switch clusters and fund your wallet.
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-09-28T11:38:18.535357"
+}
+```
+
+#### 3. API Information
+```bash
+GET /
+```
+
+**Response:**
+```json
+{
+  "name": "SBTC Target Price Oracle API",
+  "version": "1.0.0",
+  "description": "Computes SBTC target price using weighted ridge power law regression on Bitcoin price data",
+  "endpoints": {
+    "GET /sbtc/current": "Compute current SBTC target price using 1000 days of BTC data",
+    "GET /health": "Health check",
+    "GET /": "This information"
+  }
+}
+```
+
+### On-chain Integration
+
+#### Deploy Solana Program
+1. **Switch to devnet:**
+   ```bash
+   solana config set --url https://api.devnet.solana.com
+   ```
+
+2. **Deploy the program:**
+   ```bash
+   anchor deploy --provider.cluster devnet
+   ```
+
+3. **Test the program:**
+   ```bash
+   anchor test --skip-local-validator
+   ```
+
+#### Update Oracle with API Data
+```bash
+# Get current SBTC target price from API
+SBTC_VALUE=$(curl -s http://localhost:5000/sbtc/current | jq -r '.data.sbtc_scaled_cents')
+
+# Update the on-chain oracle (example using Solana CLI)
+solana program invoke --program-id FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa \
+  --accounts oracle_state=<ORACLE_STATE_ACCOUNT> \
+  --accounts pyth_price_account=8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E \
+  --accounts authority=<YOUR_WALLET> \
+  --data update_trend $SBTC_VALUE
+```
+
+### Automated Updates
+
+#### Using Cron Job
+```bash
+# Create update script
+cat > /path/to/update_oracle.sh << 'EOF'
+#!/bin/bash
+API_URL="http://localhost:5000/sbtc/current"
+LOG_FILE="/var/log/sbtc-oracle-update.log"
+
+# Get SBTC value from API
+RESPONSE=$(curl -s "$API_URL")
+SBTC_VALUE=$(echo "$RESPONSE" | jq -r '.data.sbtc_scaled_cents')
+
+if [ "$SBTC_VALUE" != "null" ] && [ "$SBTC_VALUE" != "" ]; then
+    echo "$(date): Updating oracle with SBTC value: $SBTC_VALUE" >> "$LOG_FILE"
+    # Add your Solana program update command here
+    # solana program invoke ...
+else
+    echo "$(date): Failed to get SBTC value from API" >> "$LOG_FILE"
+fi
+EOF
+
+chmod +x /path/to/update_oracle.sh
+
+# Add to crontab (update every hour)
+echo "0 * * * * /path/to/update_oracle.sh" | crontab -
+```
+
+#### Using Python Script
+```python
+import requests
+import subprocess
+import time
+
+def update_oracle():
+    try:
+        # Get SBTC value from API
+        response = requests.get('http://localhost:5000/sbtc/current')
+        data = response.json()
+        
+        if data['success']:
+            sbtc_value = data['data']['sbtc_scaled_cents']
+            print(f"Updating oracle with SBTC value: {sbtc_value}")
+            
+            # Update on-chain oracle
+            # Add your Solana program update command here
+            # subprocess.run(['solana', 'program', 'invoke', ...])
+            
+        else:
+            print(f"API error: {data['error']}")
+            
+    except Exception as e:
+        print(f"Update failed: {e}")
+
+# Run every hour
+while True:
+    update_oracle()
+    time.sleep(3600)  # 1 hour
+```
 
 ### Updating the Oracle
 - **Manually**: Use Anchor IDL to call `update_trend` with the computed SBTC target price
@@ -144,11 +369,11 @@ For mainnet, switch clusters and fund your wallet.
 - **BTC/USD Price Feed**: `8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E`
 - **Network**: Solana Mainnet/Devnet
 - **Data Source**: Pyth Network aggregated from 100+ publishers
+- **Usage**: Both historical data fetching and real-time price validation
 
 ## License
 Apache 2.0
 
 ## Acknowledgments
-- Pyth Network for oracle data
-- CoinGecko for historical price data
+- Pyth Network for both historical and real-time Bitcoin price data
 - Anchor framework for Solana development
