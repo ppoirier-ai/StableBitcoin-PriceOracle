@@ -383,21 +383,124 @@ curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 day ag
 
 ### On-chain Integration
 
-#### Deploy Solana Program
+#### Deploy Solana Program to DevNet
 1. **Switch to devnet:**
    ```bash
    solana config set --url https://api.devnet.solana.com
    ```
 
-2. **Deploy the program:**
+2. **Build the program:**
+   ```bash
+   anchor build
+   ```
+
+3. **Deploy the program:**
    ```bash
    anchor deploy --provider.cluster devnet
    ```
 
-3. **Test the program:**
+4. **Verify deployment:**
+   ```bash
+   solana program show FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa --url devnet
+   ```
+
+5. **Test the program:**
    ```bash
    anchor test --skip-local-validator
    ```
+
+#### Deploy to MainNet (Production)
+1. **Switch to mainnet:**
+   ```bash
+   solana config set --url https://api.mainnet-beta.solana.com
+   ```
+
+2. **Ensure sufficient SOL balance:**
+   ```bash
+   solana balance
+   ```
+
+3. **Deploy the program:**
+   ```bash
+   anchor deploy --provider.cluster mainnet
+   ```
+
+4. **Verify deployment:**
+   ```bash
+   solana program show <YOUR_PROGRAM_ID> --url mainnet
+   ```
+
+### Getting Data from the Oracle
+
+#### 1. Get Current SBTC Target Price
+```bash
+# Get the current computed SBTC target price
+curl http://localhost:5000/sbtc/current
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "current_btc_price": 46257.62,
+    "sbtc_target_price": 46257.62,
+    "sbtc_scaled_cents": 4625762,
+    "data_points_used": 1000,
+    "computation_timestamp": "2025-10-04T12:59:25.617824",
+    "data_source": "Pyth Network BTC/USD Price Feed (8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E)"
+  }
+}
+```
+
+#### 2. Store a New Datapoint
+```bash
+# Store datapoint with auto-computed SBTC value
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Store datapoint with custom values
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sbtc_value": 47000.0,
+    "btc_price": 46500.0,
+    "data_points_used": 1000
+  }'
+```
+
+#### 3. Get Last Stored Datapoint
+```bash
+# Get the most recent datapoint
+curl http://localhost:5000/datapoints/last
+```
+
+#### 4. Get Datapoints by Time Range
+```bash
+# Get datapoints from the last hour
+curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 hour ago' +%s)&end_timestamp=$(date +%s)"
+
+# Get datapoints from the last 24 hours
+curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 day ago' +%s)&end_timestamp=$(date +%s)"
+
+# Get datapoints from specific time range
+curl "http://localhost:5000/datapoints/batch?start_timestamp=1759553600&end_timestamp=1759554000"
+```
+
+#### 5. Health Check
+```bash
+# Check if the API is running
+curl http://localhost:5000/health
+```
+
+#### 6. Get API Information
+```bash
+# Get all available endpoints
+curl http://localhost:5000/
+```
+
+### On-chain Data Access
 
 #### Update Oracle with API Data
 ```bash
@@ -410,6 +513,203 @@ solana program invoke --program-id FtDpp1TsamUskkz2AS7NTuRGqyB3j4dpP7mj9ATHbDoa 
   --accounts pyth_price_account=8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E \
   --accounts authority=<YOUR_WALLET> \
   --data update_trend $SBTC_VALUE
+```
+
+### Testing the Oracle
+
+#### Step-by-Step Testing Guide
+
+##### Prerequisites
+- API server running on `http://localhost:5000`
+- Solana program deployed to devnet
+- `curl` command available
+
+##### Test 1: Health Check
+```bash
+# Check if the API is running
+curl http://localhost:5000/health
+```
+**Expected Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-10-04T12:59:16.965205"
+}
+```
+
+##### Test 2: Get Current SBTC Price
+```bash
+# Get the current computed SBTC target price
+curl http://localhost:5000/sbtc/current
+```
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "current_btc_price": 46257.62,
+    "sbtc_target_price": 46257.62,
+    "sbtc_scaled_cents": 4625762,
+    "data_points_used": 1000,
+    "computation_timestamp": "2025-10-04T12:59:25.617824",
+    "data_source": "Pyth Network BTC/USD Price Feed (8SXvChNYFh3qEi4J6tK1wQREu5x6YdE3C6HmZzThoG6E)"
+  }
+}
+```
+
+##### Test 3: Store a Datapoint (Auto-compute)
+```bash
+# Store a datapoint with auto-computed SBTC value
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoint": {
+      "timestamp": 1759553965,
+      "sbtc_value": 46257.62,
+      "btc_price": 46257.62,
+      "data_points_used": 1000,
+      "stored_at": "2025-10-04T12:59:25.617824"
+    },
+    "total_datapoints": 1
+  }
+}
+```
+
+##### Test 4: Store a Datapoint (Custom Values)
+```bash
+# Store a datapoint with custom values
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sbtc_value": 47000.0,
+    "btc_price": 46500.0,
+    "data_points_used": 1000
+  }'
+```
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoint": {
+      "timestamp": 1759554000,
+      "sbtc_value": 47000.0,
+      "btc_price": 46500.0,
+      "data_points_used": 1000,
+      "stored_at": "2025-10-04T13:00:00.000000"
+    },
+    "total_datapoints": 2
+  }
+}
+```
+
+##### Test 5: Get Last Datapoint
+```bash
+# Get the most recent datapoint
+curl http://localhost:5000/datapoints/last
+```
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoint": {
+      "timestamp": 1759554000,
+      "sbtc_value": 47000.0,
+      "btc_price": 46500.0,
+      "data_points_used": 1000,
+      "stored_at": "2025-10-04T13:00:00.000000"
+    },
+    "total_datapoints": 2
+  }
+}
+```
+
+##### Test 6: Get Datapoints by Time Range
+```bash
+# Get datapoints from the last hour
+curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 hour ago' +%s)&end_timestamp=$(date +%s)"
+```
+**Expected Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoints": [
+      {
+        "timestamp": 1759553965,
+        "sbtc_value": 46257.62,
+        "btc_price": 46257.62,
+        "data_points_used": 1000,
+        "stored_at": "2025-10-04T12:59:25.617824"
+      },
+      {
+        "timestamp": 1759554000,
+        "sbtc_value": 47000.0,
+        "btc_price": 46500.0,
+        "data_points_used": 1000,
+        "stored_at": "2025-10-04T13:00:00.000000"
+      }
+    ],
+    "count": 2,
+    "start_timestamp": 1759553600,
+    "end_timestamp": 1759554000,
+    "total_datapoints": 2
+  }
+}
+```
+
+##### Test 7: Error Handling
+```bash
+# Test invalid timestamp range
+curl "http://localhost:5000/datapoints/batch?start_timestamp=1759554000&end_timestamp=1759553600"
+
+# Test missing parameters
+curl "http://localhost:5000/datapoints/batch"
+```
+**Expected Response (Error):**
+```json
+{
+  "error": "start_timestamp must be less than end_timestamp",
+  "success": false
+}
+```
+
+##### Test 8: API Information
+```bash
+# Get all available endpoints
+curl http://localhost:5000/
+```
+**Expected Response:**
+```json
+{
+  "name": "SBTC Target Price Oracle API",
+  "version": "1.0.0",
+  "description": "Computes SBTC target price using weighted ridge power law regression on Bitcoin price data",
+  "endpoints": {
+    "GET /sbtc/current": "Compute current SBTC target price using 1000 days of BTC data",
+    "POST /datapoints/store": "Store a new SBTC datapoint with timestamp and value",
+    "GET /datapoints/last": "Get the most recent SBTC datapoint",
+    "GET /datapoints/batch?start_timestamp=X&end_timestamp=Y": "Get datapoints within timestamp range",
+    "GET /health": "Health check",
+    "GET /": "This information"
+  }
+}
+```
+
+#### Automated Testing
+```bash
+# Run the comprehensive test suite
+python scripts/test_datapoints.py
+
+# Run the deployment test
+python scripts/simple_deployment_test.py
 ```
 
 ### Automated Updates
