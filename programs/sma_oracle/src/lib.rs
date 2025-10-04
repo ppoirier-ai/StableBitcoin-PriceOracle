@@ -14,6 +14,14 @@ pub mod sma_oracle {
         pub last_update: i64,
     }
 
+    #[account]
+    pub struct Datapoint {
+        pub timestamp: i64,
+        pub sbtc_value: u64, // SBTC value in cents
+        pub btc_price: u64,  // BTC price at time of computation in cents
+        pub data_points_used: u32, // Number of historical data points used
+    }
+
     pub fn update_trend(ctx: Context<UpdateTrend>, new_trend: u64) -> Result<()> {
         let pyth_account = &ctx.accounts.pyth_price_account;
 
@@ -58,6 +66,48 @@ pub mod sma_oracle {
     pub fn get_trend(ctx: Context<GetTrend>) -> Result<u64> {
         Ok(ctx.accounts.oracle_state.trend_value)
     }
+
+    pub fn store_datapoint(ctx: Context<StoreDatapoint>, sbtc_value: u64, btc_price: u64, data_points_used: u32) -> Result<()> {
+        let clock = Clock::get()?;
+        let current_time = clock.unix_timestamp;
+
+        let datapoint = &mut ctx.accounts.datapoint;
+        datapoint.timestamp = current_time;
+        datapoint.sbtc_value = sbtc_value;
+        datapoint.btc_price = btc_price;
+        datapoint.data_points_used = data_points_used;
+
+        msg!("Stored datapoint: timestamp={}, sbtc_value={}, btc_price={}, data_points={}", 
+             current_time, sbtc_value, btc_price, data_points_used);
+
+        Ok(())
+    }
+
+    pub fn get_last_datapoint(ctx: Context<GetLastDatapoint>) -> Result<Datapoint> {
+        let datapoint = &ctx.accounts.datapoint;
+        Ok(Datapoint {
+            timestamp: datapoint.timestamp,
+            sbtc_value: datapoint.sbtc_value,
+            btc_price: datapoint.btc_price,
+            data_points_used: datapoint.data_points_used,
+        })
+    }
+
+    pub fn get_datapoint_batch(ctx: Context<GetDatapointBatch>, start_timestamp: i64, end_timestamp: i64) -> Result<Vec<Datapoint>> {
+        // For now, return a single datapoint. In a full implementation, you'd query multiple accounts
+        // or use a more sophisticated storage mechanism
+        let datapoint = &ctx.accounts.datapoint;
+        if datapoint.timestamp >= start_timestamp && datapoint.timestamp <= end_timestamp {
+            Ok(vec![Datapoint {
+                timestamp: datapoint.timestamp,
+                sbtc_value: datapoint.sbtc_value,
+                btc_price: datapoint.btc_price,
+                data_points_used: datapoint.data_points_used,
+            }])
+        } else {
+            Ok(vec![])
+        }
+    }
 }
 
 #[derive(Accounts)]
@@ -76,6 +126,25 @@ pub struct GetTrend<'info> {
     pub oracle_state: Account<'info, sma_oracle::OracleState>,
 }
 
+#[derive(Accounts)]
+pub struct StoreDatapoint<'info> {
+    #[account(init, payer = authority, space = 8 + 8 + 8 + 8 + 4)]
+    pub datapoint: Account<'info, sma_oracle::Datapoint>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GetLastDatapoint<'info> {
+    pub datapoint: Account<'info, sma_oracle::Datapoint>,
+}
+
+#[derive(Accounts)]
+pub struct GetDatapointBatch<'info> {
+    pub datapoint: Account<'info, sma_oracle::Datapoint>,
+}
+
 #[error_code]
 pub enum ErrorCode {
     #[msg("Invalid trend value")]
@@ -88,6 +157,10 @@ pub enum ErrorCode {
     InvalidPrice,
     #[msg("High confidence interval - unreliable data")]
     HighConfidence,
+    #[msg("Invalid datapoint timestamp")]
+    InvalidTimestamp,
+    #[msg("Datapoint not found")]
+    DatapointNotFound,
 }
 
 pub fn initialize(ctx: Context<Initialize>) -> Result<()> {

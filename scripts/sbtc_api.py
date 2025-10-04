@@ -3,13 +3,16 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 import json
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import traceback
 
 # Genesis date for Bitcoin (July 17, 2010)
 GENESIS_DATE = datetime(2010, 7, 17)
 
 app = Flask(__name__)
+
+# In-memory storage for datapoints (in production, use a database)
+datapoints_storage = []
 
 def get_days_since_genesis(date):
     """Calculate days since genesis, ensuring >=1."""
@@ -317,6 +320,158 @@ def health_check():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/datapoints/store', methods=['POST'])
+def store_datapoint():
+    """Store a new SBTC datapoint with timestamp and value."""
+    try:
+        data = request.get_json()
+        
+        if not data:
+            data = {}  # Allow empty JSON for auto-compute
+        
+        # Get current SBTC value if not provided
+        if 'sbtc_value' not in data:
+            try:
+                # Call the SBTC computation directly
+                df = get_btc_historical_pyth(days=1000)
+                if len(df) == 0:
+                    return jsonify({
+                        'error': 'No data available for SBTC computation',
+                        'success': False
+                    }), 400
+                
+                # Use simplified calculation
+                current_price = df['price'].iloc[0]
+                if len(df) >= 30:
+                    ma_30 = df['price'].rolling(30, min_periods=1).mean().iloc[0]
+                    if len(df) >= 100:
+                        ma_100 = df['price'].rolling(100, min_periods=1).mean().iloc[0]
+                        sbtc_value = (current_price * 0.5) + (ma_30 * 0.3) + (ma_100 * 0.2)
+                    else:
+                        sbtc_value = (current_price * 0.7) + (ma_30 * 0.3)
+                else:
+                    sbtc_value = current_price
+                
+                btc_price = current_price
+                data_points_used = len(df)
+                
+            except Exception as e:
+                return jsonify({
+                    'error': f'Failed to compute SBTC value: {str(e)}',
+                    'success': False
+                }), 500
+        else:
+            sbtc_value = data['sbtc_value']
+            btc_price = data.get('btc_price', 0)
+            data_points_used = data.get('data_points_used', 0)
+        
+        # Create datapoint
+        datapoint = {
+            'timestamp': int(datetime.now().timestamp()),
+            'sbtc_value': float(sbtc_value),
+            'btc_price': float(btc_price),
+            'data_points_used': int(data_points_used),
+            'stored_at': datetime.now().isoformat()
+        }
+        
+        # Store in memory (in production, save to database)
+        datapoints_storage.append(datapoint)
+        
+        # Keep only last 1000 datapoints to prevent memory issues
+        if len(datapoints_storage) > 1000:
+            datapoints_storage.pop(0)
+        
+        print(f"Stored datapoint: {datapoint}")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'datapoint': datapoint,
+                'total_datapoints': len(datapoints_storage)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error storing datapoint: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
+@app.route('/datapoints/last', methods=['GET'])
+def get_last_datapoint():
+    """Get the most recent SBTC datapoint."""
+    try:
+        if not datapoints_storage:
+            return jsonify({
+                'error': 'No datapoints available',
+                'success': False
+            }), 404
+        
+        last_datapoint = datapoints_storage[-1]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'datapoint': last_datapoint,
+                'total_datapoints': len(datapoints_storage)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting last datapoint: {e}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
+@app.route('/datapoints/batch', methods=['GET'])
+def get_datapoint_batch():
+    """Get datapoints within a timestamp range."""
+    try:
+        start_timestamp = request.args.get('start_timestamp', type=int)
+        end_timestamp = request.args.get('end_timestamp', type=int)
+        
+        if not start_timestamp or not end_timestamp:
+            return jsonify({
+                'error': 'start_timestamp and end_timestamp parameters are required',
+                'success': False
+            }), 400
+        
+        if start_timestamp >= end_timestamp:
+            return jsonify({
+                'error': 'start_timestamp must be less than end_timestamp',
+                'success': False
+            }), 400
+        
+        # Filter datapoints within the timestamp range
+        filtered_datapoints = [
+            dp for dp in datapoints_storage
+            if start_timestamp <= dp['timestamp'] <= end_timestamp
+        ]
+        
+        # Sort by timestamp (oldest first)
+        filtered_datapoints.sort(key=lambda x: x['timestamp'])
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'datapoints': filtered_datapoints,
+                'count': len(filtered_datapoints),
+                'start_timestamp': start_timestamp,
+                'end_timestamp': end_timestamp,
+                'total_datapoints': len(datapoints_storage)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error getting datapoint batch: {e}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
 @app.route('/', methods=['GET'])
 def root():
     """Root endpoint with API information."""
@@ -325,6 +480,9 @@ def root():
         'version': '1.0.0',
         'endpoints': {
             'GET /sbtc/current': 'Compute current SBTC target price using 1000 days of BTC data',
+            'POST /datapoints/store': 'Store a new SBTC datapoint with timestamp and value',
+            'GET /datapoints/last': 'Get the most recent SBTC datapoint',
+            'GET /datapoints/batch?start_timestamp=X&end_timestamp=Y': 'Get datapoints within timestamp range',
             'GET /health': 'Health check',
             'GET /': 'This information'
         },
@@ -335,6 +493,9 @@ if __name__ == '__main__':
     print("Starting SBTC Target Price Oracle API...")
     print("Available endpoints:")
     print("  GET /sbtc/current - Compute current SBTC target price")
+    print("  POST /datapoints/store - Store a new SBTC datapoint")
+    print("  GET /datapoints/last - Get the most recent datapoint")
+    print("  GET /datapoints/batch - Get datapoints within timestamp range")
     print("  GET /health - Health check")
     print("  GET / - API information")
     print("\nStarting server on http://localhost:5000")

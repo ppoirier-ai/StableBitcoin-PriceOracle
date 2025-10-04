@@ -233,7 +233,87 @@ GET /health
 }
 ```
 
-#### 3. API Information
+#### 3. Store SBTC Datapoint
+```bash
+POST /datapoints/store
+```
+
+**Request Body (optional):**
+```json
+{
+  "sbtc_value": 47000.0,
+  "btc_price": 46500.0,
+  "data_points_used": 1000
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoint": {
+      "timestamp": 1759553648,
+      "sbtc_value": 47000.0,
+      "btc_price": 46500.0,
+      "data_points_used": 1000,
+      "stored_at": "2025-10-04T12:54:08.857441"
+    },
+    "total_datapoints": 1
+  }
+}
+```
+
+#### 4. Get Last Datapoint
+```bash
+GET /datapoints/last
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoint": {
+      "timestamp": 1759553648,
+      "sbtc_value": 47000.0,
+      "btc_price": 46500.0,
+      "data_points_used": 1000,
+      "stored_at": "2025-10-04T12:54:08.857441"
+    },
+    "total_datapoints": 1
+  }
+}
+```
+
+#### 5. Get Datapoint Batch
+```bash
+GET /datapoints/batch?start_timestamp=1759553600&end_timestamp=1759553700
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "datapoints": [
+      {
+        "timestamp": 1759553648,
+        "sbtc_value": 47000.0,
+        "btc_price": 46500.0,
+        "data_points_used": 1000,
+        "stored_at": "2025-10-04T12:54:08.857441"
+      }
+    ],
+    "count": 1,
+    "start_timestamp": 1759553600,
+    "end_timestamp": 1759553700,
+    "total_datapoints": 1
+  }
+}
+```
+
+#### 6. API Information
 ```bash
 GET /
 ```
@@ -246,10 +326,59 @@ GET /
   "description": "Computes SBTC target price using weighted ridge power law regression on Bitcoin price data",
   "endpoints": {
     "GET /sbtc/current": "Compute current SBTC target price using 1000 days of BTC data",
+    "POST /datapoints/store": "Store a new SBTC datapoint with timestamp and value",
+    "GET /datapoints/last": "Get the most recent SBTC datapoint",
+    "GET /datapoints/batch?start_timestamp=X&end_timestamp=Y": "Get datapoints within timestamp range",
     "GET /health": "Health check",
     "GET /": "This information"
   }
 }
+```
+
+### Datapoint Storage and Retrieval
+
+The API provides comprehensive datapoint storage and retrieval functionality:
+
+#### Features
+- **Automatic SBTC Computation**: Store datapoints with auto-computed SBTC values
+- **Custom Values**: Store datapoints with custom SBTC, BTC price, and data point counts
+- **Timestamp-based Queries**: Retrieve datapoints within specific time ranges
+- **In-memory Storage**: Fast access to recent datapoints (keeps last 1000)
+- **RESTful API**: Simple HTTP endpoints for all operations
+
+#### Usage Examples
+
+**Store a datapoint with auto-computed values:**
+```bash
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Store a datapoint with custom values:**
+```bash
+curl -X POST http://localhost:5000/datapoints/store \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sbtc_value": 47000.0,
+    "btc_price": 46500.0,
+    "data_points_used": 1000
+  }'
+```
+
+**Get the most recent datapoint:**
+```bash
+curl http://localhost:5000/datapoints/last
+```
+
+**Get datapoints from the last hour:**
+```bash
+curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 hour ago' +%s)&end_timestamp=$(date +%s)"
+```
+
+**Get datapoints from the last 24 hours:**
+```bash
+curl "http://localhost:5000/datapoints/batch?start_timestamp=$(date -d '1 day ago' +%s)&end_timestamp=$(date +%s)"
 ```
 
 ### On-chain Integration
